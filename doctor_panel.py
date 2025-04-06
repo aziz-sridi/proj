@@ -128,11 +128,15 @@ class DoctorPanel(BasePanel):
             self.appointments_tree.delete(*self.appointments_tree.get_children())
             appointments = self.db.get_appointments(self.doctor_id)
             for appt in appointments:
-                appt_time = parser.parse(str(appt[3])).strftime("%Y-%m-%d %H:%M")
-                self.appointments_tree.insert('', 'end', values=(appt[0], appt[2], *appt_time.split()))
+                appointment_id = appt['id']
+                patient_name = appt['patient_name']
+                appointment_time = appt['appointment_time']
+                date_str = appointment_time.strftime("%Y-%m-%d")
+                time_str = appointment_time.strftime("%H:%M")
+                self.appointments_tree.insert('', 'end', 
+                    values=(appointment_id, patient_name, date_str, time_str))
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load appointments: {str(e)}")
-
     def update_appointment(self):
         selected = self.appointments_tree.selection()
         if not selected:
@@ -142,6 +146,7 @@ class DoctorPanel(BasePanel):
         values = self.appointments_tree.item(selected[0])['values']
         if not values:
             return
+        appointment_id = values[0]
         patient = self.patient_name.get()
         date = self.appointment_date.get()
         time = self.appointment_time.get()
@@ -227,8 +232,14 @@ class DoctorPanel(BasePanel):
     def load_acts(self):
         try:
             self.acts_tree.delete(*self.acts_tree.get_children())
-            for act in self.db.get_acts(self.doctor_id):
-                self.acts_tree.insert('', 'end', values=act)
+            acts = self.db.get_acts(self.doctor_id)
+            for act in acts:
+                act_id = act['id']
+                name = act['name']
+                description = act['description']
+                tools = act['tools']
+                self.acts_tree.insert('', 'end', 
+                    values=(act_id, name, description, tools))
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load medical acts: {str(e)}")
 
@@ -307,9 +318,19 @@ class DoctorPanel(BasePanel):
         scrollbar.grid(row=2, column=2, sticky="ns")
         self.files_tree.configure(yscrollcommand=scrollbar.set)
 
-        ttk.Button(frame, text="Open File", command=self.open_file).grid(row=3, column=0, columnspan=2, pady=10)
-        self.load_files()
+        # Button Frame for Open/Delete
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=3, column=0, columnspan=2, pady=10, sticky="ew")
+        
+        # Configure button frame columns
+        btn_frame.columnconfigure(0, weight=1)
+        btn_frame.columnconfigure(1, weight=1)
+        
+        # Add buttons to btn_frame
+        ttk.Button(btn_frame, text="Open File", command=self.open_file).grid(row=0, column=0, padx=5, sticky="ew")
+        ttk.Button(btn_frame, text="Delete File", command=self.delete_file).grid(row=0, column=1, padx=5, sticky="ew")
 
+        self.load_files()
     def upload_file(self):
         file_path = filedialog.askopenfilename()
         patient_name = self.file_patient_name.get()
@@ -343,8 +364,15 @@ class DoctorPanel(BasePanel):
                 FROM files 
                 WHERE doctor_id=%s
             """, (self.doctor_id,))
-            for row in self.db.cursor.fetchall():
-                self.files_tree.insert('', 'end', values=row)
+            files = self.db.cursor.fetchall()
+            for file in files:
+                # Extract data from dictionary
+                file_id = file['id']
+                patient = file['patient_name']
+                filename = file['file_name']
+                uploaded = file['uploaded_at'].strftime("%Y-%m-%d %H:%M")
+                self.files_tree.insert('', 'end', 
+                    values=(file_id, patient, filename, uploaded))
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load files: {str(e)}")
 
@@ -357,18 +385,47 @@ class DoctorPanel(BasePanel):
         try:
             file_id = self.files_tree.item(selected[0])['values'][0]
             self.db.cursor.execute("SELECT file_path FROM files WHERE id=%s", (file_id,))
-            file_path = self.db.cursor.fetchone()[0]
-            
-            if platform.system() == 'Darwin':       # macOS
-                subprocess.call(('open', file_path))
-            elif platform.system() == 'Windows':    # Windows
-                os.startfile(file_path)
-            else:                                   # linux variants
-                subprocess.call(('xdg-open', file_path))
+            file_record = self.db.cursor.fetchone()
+            if file_record:
+                file_path = file_record['file_path']
+                # Open file based on OS
+                if platform.system() == 'Darwin':
+                    subprocess.call(('open', file_path))
+                elif platform.system() == 'Windows':
+                    os.startfile(file_path)
+                else:
+                    subprocess.call(('xdg-open', file_path))
+            else:
+                messagebox.showerror("Error", "File not found in database")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open file: {str(e)}")
+    
+    def delete_file(self):
+        selected = self.files_tree.selection()
+        if not selected:
+            messagebox.showwarning("Warning", "Please select a file to delete")
+            return
 
-    # ------------------- Messaging Tab -------------------
-    def create_messaging_tab(self):
-        # Inherited from BasePanel
-        pass
+        if messagebox.askyesno("Confirm Delete", "Are you sure you want to permanently delete this file?"):
+            try:
+                file_id = self.files_tree.item(selected[0])['values'][0]
+                
+                # Get file path first
+                self.db.cursor.execute("SELECT file_path FROM files WHERE id=%s", (file_id,))
+                file_record = self.db.cursor.fetchone()
+                
+                if file_record:
+                    file_path = file_record['file_path']
+                    
+                    # Delete physical file
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                    else:
+                        messagebox.showwarning("Warning", "File not found on disk - database entry will still be removed")
+                    
+                    # Use the new database method
+                    self.db.delete_file(file_id)
+                    self.load_files()
+                    
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to delete file: {str(e)}")

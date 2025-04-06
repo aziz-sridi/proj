@@ -86,5 +86,11 @@ class Database:
     def delete_act(self, act_id):
         self.cursor.execute("DELETE FROM acts WHERE id=%s", (act_id,))
         self.connection.commit()
-
-    
+    def delete_file(self, file_id):
+        try:
+            self.cursor.execute("DELETE FROM files WHERE id=%s", (file_id,))
+            self.connection.commit()
+            return True
+        except Error as e:
+            self.connection.rollback()
+            raise e
