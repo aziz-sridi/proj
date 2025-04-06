@@ -1,0 +1,61 @@
+CREATE DATABASE clinic_db;
+
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) UNIQUE,
+    password VARCHAR(50),
+    role ENUM('PDG', 'Médecin', 'Employé'),
+    doctor_id INT
+);
+
+CREATE TABLE stock (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100),
+    quantity INT
+);
+
+CREATE TABLE doctors (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100),
+    specialty VARCHAR(100),
+    availability VARCHAR(100)
+);
+
+CREATE TABLE appointments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    doctor_id INT,
+    patient_name VARCHAR(100),
+    appointment_time DATETIME
+);
+
+CREATE TABLE acts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    doctor_id INT,
+    name VARCHAR(100),
+    description TEXT,
+    tools TEXT
+);
+
+CREATE TABLE files (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    doctor_id INT,
+    patient_name VARCHAR(100),
+    file_name VARCHAR(255),
+    file_path TEXT,
+    uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (doctor_id) REFERENCES doctors(id)
+);
+
+CREATE TABLE messages (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    sender_id INT,
+    receiver_id INT,
+    message TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (sender_id) REFERENCES users(id),
+    FOREIGN KEY (receiver_id) REFERENCES users(id)
+);
+
+CREATE USER 'clinic_user'@'%' IDENTIFIED BY 'secure_password';
+GRANT ALL PRIVILEGES ON clinic_db.* TO 'clinic_user'@'%';
+FLUSH PRIVILEGES;
